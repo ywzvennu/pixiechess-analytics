@@ -32,11 +32,13 @@ def __(mo):
 
 
 @app.cell
-def __(pl):
+def __(mo, pl):
     import math
     import json
+    import urllib.request
 
-    with open("data/players.jsonl", "r") as _f:
+    _url = str(mo.notebook_location() / "data" / "players.jsonl")
+    with urllib.request.urlopen(_url) as _f:
         _rows = [json.loads(_line) for _line in _f if _line.strip()]
     players = pl.DataFrame(_rows)
     INITIAL_RATING = 1500
