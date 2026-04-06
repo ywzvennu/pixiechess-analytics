@@ -1,6 +1,6 @@
 import marimo
 
-app = marimo.App(width="full")
+app = marimo.App(width="full", app_title="Pixie Chess Analytics")
 
 
 @app.cell
