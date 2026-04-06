@@ -89,7 +89,7 @@ def __(INITIAL_RATING, RATING_MAX, RATING_MIN, RATING_TICKS, alt, players):
             x=alt.X(
                 "rating:Q",
                 bin=alt.Bin(step=10, extent=[RATING_MIN, RATING_MAX]),
-                title="Rating",
+                title="rating",
                 scale=alt.Scale(domain=[RATING_MIN, RATING_MAX], nice=False),
                 axis=alt.Axis(
                     values=RATING_TICKS,
@@ -102,7 +102,7 @@ def __(INITIAL_RATING, RATING_MAX, RATING_MIN, RATING_TICKS, alt, players):
             ),
             y=alt.Y(
                 "count():Q",
-                title="Players",
+                title="players",
                 axis=alt.Axis(
                     format="d",
                     tickMinStep=1,
@@ -111,7 +111,7 @@ def __(INITIAL_RATING, RATING_MAX, RATING_MIN, RATING_TICKS, alt, players):
                     tickWidth=1,
                 ),
             ),
-            tooltip=[alt.Tooltip("count():Q", title="Players")],
+            tooltip=[alt.Tooltip("count():Q", title="players")],
         )
     )
 
@@ -141,7 +141,7 @@ def __(INITIAL_RATING, RATING_MAX, RATING_MIN, RATING_TICKS, alt, players):
             ),
             tooltip=[
                 alt.Tooltip("name:N", title="label"),
-                alt.Tooltip("value:Q", format=".1f", title="value"),
+                alt.Tooltip("value:Q", format=",.1f", title="value"),
             ],
         )
     )
@@ -165,7 +165,7 @@ def __(mo):
 
 @app.cell
 def __(mo):
-    games_log_y = mo.ui.switch(value=False, label="Log y-axis")
+    games_log_y = mo.ui.switch(value=False, label="log y-axis")
     games_log_y
     return (games_log_y,)
 
@@ -185,7 +185,7 @@ def __(alt, games_log_y, players):
             x=alt.X(
                 "games_played:Q",
                 bin=alt.Bin(step=_step, extent=[0, _domain_max]),
-                title="Games Played",
+                title="games played (g)",
                 scale=alt.Scale(domain=[0, _domain_max], nice=False),
                 axis=alt.Axis(
                     format="d",
@@ -198,7 +198,7 @@ def __(alt, games_log_y, players):
             ),
             y=alt.Y(
                 "count():Q",
-                title="Players" + (" (log)" if games_log_y.value else ""),
+                title="players" + (" (log)" if games_log_y.value else ""),
                 scale=alt.Scale(
                     type="log" if games_log_y.value else "linear",
                     base=10,
@@ -211,7 +211,7 @@ def __(alt, games_log_y, players):
                     tickWidth=1,
                 ),
             ),
-            tooltip=[alt.Tooltip("count():Q", title="Players")],
+            tooltip=[alt.Tooltip("count():Q", title="players")],
         )
     )
 
@@ -239,7 +239,7 @@ def __(alt, games_log_y, players):
             ),
             tooltip=[
                 alt.Tooltip("name:N", title="label"),
-                alt.Tooltip("value:Q", format=".1f", title="value"),
+                alt.Tooltip("value:Q", format=",.1f", title="value"),
             ],
         )
     )
@@ -256,19 +256,13 @@ def __(alt, games_log_y, players):
 
 
 @app.cell
-def __(mo):
-    mo.md("## Rating Distribution by Games Played")
-    return
-
-
-@app.cell
 def __(pl, players):
     # Bucket games played: [1], [2-4], [5-16], [17-64], ...
     _max_games = players["games_played"].max()
     _buckets = []
     _lo, _hi = 1, 1
     while _lo <= _max_games:
-        label = f"g = {_lo}" if _lo == _hi else f"{_lo}–{_hi}"
+        label = f"g = {_lo}" if _lo == _hi else f"g ∈ [{_lo}, {_hi}]"
         _buckets.append((label, _lo, _hi))
         _lo = _hi + 1
         _hi = _hi * 4 if _hi > 1 else 4
@@ -291,230 +285,119 @@ def __(pl, players):
 
 
 @app.cell
+def __(mo):
+    mo.md("## Rating Boxplots by Games Played")
+    return
+
+
+@app.cell
 def __(
-    INITIAL_RATING,
     RATING_MAX,
     RATING_MIN,
     RATING_TICKS,
     alt,
     bucket_order,
+    pl,
+    players,
     players_bucketed,
 ):
-    _x = alt.X(
-        "rating:Q",
-        bin=alt.Bin(step=10, extent=[RATING_MIN, RATING_MAX]),
-        title="Rating",
-        scale=alt.Scale(domain=[RATING_MIN, RATING_MAX], nice=False),
-        axis=alt.Axis(values=RATING_TICKS, format="d", labelAngle=0),
+    # Compute box stats per bucket, plus an "all" row for the overall series.
+    _overall_stats = players.select(
+        pl.lit("all").alias("games_bucket"),
+        pl.col("rating").min().alias("min"),
+        pl.col("rating").quantile(0.25).alias("q1"),
+        pl.col("rating").median().alias("median"),
+        pl.col("rating").mean().alias("mean"),
+        pl.col("rating").quantile(0.75).alias("q3"),
+        pl.col("rating").max().alias("max"),
+        pl.len().alias("n"),
     )
+    _group_stats = players_bucketed.group_by("games_bucket").agg(
+        pl.col("rating").min().alias("min"),
+        pl.col("rating").quantile(0.25).alias("q1"),
+        pl.col("rating").median().alias("median"),
+        pl.col("rating").mean().alias("mean"),
+        pl.col("rating").quantile(0.75).alias("q3"),
+        pl.col("rating").max().alias("max"),
+        pl.len().alias("n"),
+    )
+    _stats = pl.concat([_overall_stats, _group_stats])
+    _order = ["all", *bucket_order]
 
-    # Bar palette for per-bucket groups — avoids colors used by the rule
-    # lines (gray=initial, red=mean, purple=median) and the default blue
-    # used by the overall rating chart.
-    _palette = [
-        "#f58518", "#72b7b2", "#eeca3b", "#b279a2",
-        "#ff9da6", "#9d755d", "#bab0ac",
+    # "all" is blue; groups use the non-blue palette.
+    _group_palette = [
+        "#f58518", "#54a24b", "#e45756", "#72b7b2",
+        "#eeca3b", "#b279a2", "#ff9da6", "#9d755d", "#bab0ac",
     ]
-    _bar_range = [_palette[i % len(_palette)] for i in range(len(bucket_order))]
+    _range = ["#4c78a8"] + [
+        _group_palette[i % len(_group_palette)] for i in range(len(bucket_order))
+    ]
 
-    _bars = alt.Chart().mark_bar(opacity=0.8).encode(
-        x=_x,
-        y=alt.Y(
-            "count():Q",
-            title="Players",
-            axis=alt.Axis(format="d", tickMinStep=1),
-        ),
-        color=alt.Color(
-            "games_bucket:N",
-            sort=bucket_order,
-            scale=alt.Scale(domain=bucket_order, range=_bar_range),
-            legend=None,
-        ),
+    _x_scale = alt.Scale(domain=[RATING_MIN, RATING_MAX], nice=False)
+    _x_axis = alt.Axis(
+        values=RATING_TICKS,
+        format="d",
+        labelAngle=0,
+        grid=True,
+        domainWidth=1,
+        tickWidth=1,
+    )
+    _y = alt.Y(
+        "games_bucket:N",
+        sort=_order,
+        title="games played (g)",
+        axis=alt.Axis(grid=True, domainWidth=1, tickWidth=1),
+    )
+    _color = alt.Color(
+        "games_bucket:N",
+        sort=_order,
+        scale=alt.Scale(domain=_order, range=_range),
+        legend=None,
     )
 
-    _rules = (
-        alt.Chart()
-        .transform_aggregate(
-            mean="mean(rating)",
-            median="median(rating)",
-            groupby=["games_bucket"],
-        )
-        .transform_calculate(initial=f"{INITIAL_RATING}")
-        .transform_fold(["initial", "mean", "median"], as_=["label", "value"])
-        .mark_rule(strokeDash=[4, 4], size=2)
-        .encode(
-            x=alt.X("value:Q"),
-            color=alt.Color(
-                "label:N",
-                title=None,
-                scale=alt.Scale(
-                    domain=["initial", "mean", "median"],
-                    range=["#7f7f7f", "#d62728", "#9467bd"],
-                ),
-            ),
-            tooltip=["label:N", alt.Tooltip("value:Q", format=".1f")],
-        )
+    _tooltip = [
+        alt.Tooltip("games_bucket:N", title="games"),
+        alt.Tooltip("min:Q", format=",.1f", title="min"),
+        alt.Tooltip("q1:Q", format=",.1f", title="q1"),
+        alt.Tooltip("median:Q", format=",.1f", title="median"),
+        alt.Tooltip("mean:Q", format=",.1f", title="mean"),
+        alt.Tooltip("q3:Q", format=",.1f", title="q3"),
+        alt.Tooltip("max:Q", format=",.1f", title="max"),
+        alt.Tooltip("n:Q", format=",", title="n"),
+    ]
+
+    _base = alt.Chart(_stats)
+
+    _whisker = _base.mark_rule(size=1).encode(
+        x=alt.X("min:Q", title="rating", scale=_x_scale, axis=_x_axis),
+        x2="max:Q",
+        y=_y,
+        color=_color,
+        tooltip=_tooltip,
     )
 
-    faceted = (
-        alt.layer(_bars, _rules, data=players_bucketed)
-        .properties(height=220, width=820)
-        .facet(
-            row=alt.Row(
-                "games_bucket:N",
-                sort=bucket_order,
-                title="Games Played",
-                header=alt.Header(
-                    labelFontSize=12,
-                    labelAngle=0,
-                    labelAlign="center",
-                    labelAnchor="middle",
-                    labelOrient="top",
-                    titleOrient="left",
-                ),
-            )
-        )
-        .resolve_scale(y="independent")
-        .properties(title="Pixie Chess: Rating Distribution by Games Played")
+    _box = _base.mark_bar(size=22).encode(
+        x=alt.X("q1:Q", scale=_x_scale),
+        x2="q3:Q",
+        y=_y,
+        color=_color,
+        tooltip=_tooltip,
     )
-    faceted
-    return (faceted,)
 
-
-@app.cell
-def __(mo):
-    mo.md("### Alternative: 2D Density Heatmap")
-    return
-
-
-@app.cell
-def __(GAMES_MAX, GAMES_TICKS, RATING_MAX, RATING_MIN, RATING_TICKS, alt, players):
-    heatmap = (
-        alt.Chart(players)
-        .mark_rect()
-        .encode(
-            x=alt.X(
-                "rating:Q",
-                bin=alt.Bin(step=25, extent=[RATING_MIN, RATING_MAX]),
-                title="Rating",
-                scale=alt.Scale(domain=[RATING_MIN, RATING_MAX], nice=False),
-                axis=alt.Axis(values=RATING_TICKS, format="d", labelAngle=0),
-            ),
-            y=alt.Y(
-                "games_played:Q",
-                bin=alt.Bin(maxbins=30),
-                title="Games Played (log)",
-                scale=alt.Scale(type="log", base=10, domain=[1, GAMES_MAX]),
-                axis=alt.Axis(values=GAMES_TICKS, format="d"),
-            ),
-            color=alt.Color(
-                "count():Q",
-                title="Players",
-                scale=alt.Scale(scheme="viridis"),
-            ),
-            tooltip=[alt.Tooltip("count():Q", title="Players")],
-        )
-        .properties(
-            height=460,
-            width="container",
-            title="Pixie Chess: Rating × Games Played Density",
-        )
+    _median_tick = _base.mark_tick(
+        size=22,
+        thickness=2,
+        color="white",
+    ).encode(
+        x=alt.X("median:Q", scale=_x_scale),
+        y=_y,
+        tooltip=_tooltip,
     )
-    heatmap
-    return (heatmap,)
 
-
-@app.cell
-def __(mo):
-    mo.md("### Alternative: Ridgeline Plot")
-    return
-
-
-@app.cell
-def __(RATING_MAX, RATING_MIN, RATING_TICKS, alt, bucket_order, players_bucketed):
-    _step = 60
-    ridgeline = (
-        alt.Chart(players_bucketed, height=_step)
-        .transform_density(
-            "rating",
-            as_=["rating", "density"],
-            groupby=["games_bucket"],
-            extent=[RATING_MIN, RATING_MAX],
-            steps=200,
-        )
-        .mark_area(
-            interpolate="monotone",
-            fillOpacity=0.7,
-            stroke="#333",
-            strokeWidth=0.8,
-        )
-        .encode(
-            x=alt.X(
-                "rating:Q",
-                title="Rating",
-                scale=alt.Scale(domain=[RATING_MIN, RATING_MAX], nice=False),
-                axis=alt.Axis(values=RATING_TICKS, format="d", labelAngle=0),
-            ),
-            y=alt.Y("density:Q", axis=None, scale=alt.Scale(range=[_step, -_step * 1.5])),
-            color=alt.Color(
-                "games_bucket:N",
-                sort=bucket_order,
-                legend=None,
-            ),
-            row=alt.Row(
-                "games_bucket:N",
-                sort=bucket_order,
-                title="Games Played",
-                header=alt.Header(
-                    labelAngle=0,
-                    labelAlign="left",
-                    labelOrient="left",
-                    labelFontSize=11,
-                ),
-            ),
-        )
-        .properties(width=820, bounds="flush", title="Pixie Chess: Rating Density by Games Played")
-        .configure_facet(spacing=0)
-        .configure_view(stroke=None)
-    )
-    ridgeline
-    return (ridgeline,)
-
-
-@app.cell
-def __(mo):
-    mo.md("### Alternative: Box Plot")
-    return
-
-
-@app.cell
-def __(RATING_MAX, RATING_MIN, RATING_TICKS, alt, bucket_order, players_bucketed):
-    boxplot = (
-        alt.Chart(players_bucketed)
-        .mark_boxplot(size=20, extent="min-max")
-        .encode(
-            x=alt.X(
-                "rating:Q",
-                title="Rating",
-                scale=alt.Scale(domain=[RATING_MIN, RATING_MAX], nice=False),
-                axis=alt.Axis(values=RATING_TICKS, format="d", labelAngle=0),
-            ),
-            y=alt.Y(
-                "games_bucket:N",
-                sort=bucket_order,
-                title="Games Played",
-            ),
-            color=alt.Color(
-                "games_bucket:N",
-                sort=bucket_order,
-                legend=None,
-            ),
-        )
-        .properties(
-            height=max(180, 40 * len(bucket_order)),
-            width="container",
-            title="Pixie Chess: Rating Boxplots by Games Played",
-        )
+    boxplot = alt.layer(_whisker, _box, _median_tick).properties(
+        height=420,
+        width="container",
+        title="Pixie Chess: Rating Boxplots by Games Played",
     )
     boxplot
     return (boxplot,)
@@ -522,14 +405,45 @@ def __(RATING_MAX, RATING_MIN, RATING_TICKS, alt, bucket_order, players_bucketed
 
 @app.cell
 def __(mo):
-    mo.md("### Alternative: Empirical CDF Overlay")
+    mo.md("## Rating CDF by Games Played")
     return
 
 
 @app.cell
-def __(RATING_MAX, RATING_MIN, RATING_TICKS, alt, bucket_order, players_bucketed):
+def __(
+    RATING_MAX,
+    RATING_MIN,
+    RATING_TICKS,
+    alt,
+    bucket_order,
+    pl,
+    players,
+    players_bucketed,
+):
+    # Combine per-bucket data with an "all" series so both render from
+    # a single dataset and share one legend.
+    _overall = players.select(pl.col("rating")).with_columns(
+        pl.lit("all").alias("games_bucket")
+    )
+    _combined = pl.concat(
+        [
+            _overall,
+            players_bucketed.select(["rating", "games_bucket"]),
+        ]
+    )
+    _order = ["all", *bucket_order]
+
+    # "all" is blue; groups use the non-blue palette.
+    _group_palette = [
+        "#f58518", "#54a24b", "#e45756", "#72b7b2",
+        "#eeca3b", "#b279a2", "#ff9da6", "#9d755d", "#bab0ac",
+    ]
+    _range = ["#4c78a8"] + [
+        _group_palette[i % len(_group_palette)] for i in range(len(bucket_order))
+    ]
+
     cdf = (
-        alt.Chart(players_bucketed)
+        alt.Chart(_combined)
         .transform_window(
             cumulative="count()",
             sort=[{"field": "rating"}],
@@ -544,28 +458,41 @@ def __(RATING_MAX, RATING_MIN, RATING_TICKS, alt, bucket_order, players_bucketed
         .encode(
             x=alt.X(
                 "rating:Q",
-                title="Rating",
+                title="rating",
                 scale=alt.Scale(domain=[RATING_MIN, RATING_MAX], nice=False),
-                axis=alt.Axis(values=RATING_TICKS, format="d", labelAngle=0),
+                axis=alt.Axis(
+                    values=RATING_TICKS,
+                    format="d",
+                    labelAngle=0,
+                    grid=True,
+                    domainWidth=1,
+                    tickWidth=1,
+                ),
             ),
             y=alt.Y(
                 "pct:Q",
-                title="Cumulative Share",
-                axis=alt.Axis(format=".0%"),
+                title="cumulative share",
+                axis=alt.Axis(
+                    format=".0%",
+                    grid=True,
+                    domainWidth=1,
+                    tickWidth=1,
+                ),
             ),
             color=alt.Color(
                 "games_bucket:N",
-                sort=bucket_order,
-                title="Games Played",
+                sort=_order,
+                title="games played (g)",
+                scale=alt.Scale(domain=_order, range=_range),
             ),
             tooltip=[
-                alt.Tooltip("games_bucket:N", title="Games"),
-                alt.Tooltip("rating:Q", title="Rating"),
-                alt.Tooltip("pct:Q", title="Share", format=".1%"),
+                alt.Tooltip("games_bucket:N", title="games"),
+                alt.Tooltip("rating:Q", title="rating", format=",.1f"),
+                alt.Tooltip("pct:Q", title="share", format=".1%"),
             ],
         )
         .properties(
-            height=460,
+            height=420,
             width="container",
             title="Pixie Chess: Rating CDF by Games Played",
         )
@@ -573,82 +500,6 @@ def __(RATING_MAX, RATING_MIN, RATING_TICKS, alt, bucket_order, players_bucketed
     )
     cdf
     return (cdf,)
-
-
-@app.cell
-def __(mo):
-    mo.md("## Rating vs Games Played")
-    return
-
-
-@app.cell
-def __(
-    GAMES_MAX,
-    GAMES_TICKS,
-    RATING_MAX,
-    RATING_MIN,
-    RATING_TICKS,
-    alt,
-    players,
-):
-    scatter_base = alt.Chart(players)
-    _zoom = alt.selection_interval(bind="scales")
-
-    _main_w, _main_h, _marg = 820, 480, 110
-    _rating_scale = alt.Scale(domain=[RATING_MIN, RATING_MAX], nice=False)
-    _games_scale = alt.Scale(type="log", base=10, domain=[1, GAMES_MAX])
-
-    scatter = scatter_base.mark_circle(size=18, opacity=0.5).encode(
-        x=alt.X(
-            "rating:Q",
-            title="Rating",
-            scale=_rating_scale,
-            axis=alt.Axis(values=RATING_TICKS, format="d", labelAngle=0),
-        ),
-        y=alt.Y(
-            "games_played:Q",
-            title="Games played (log)",
-            scale=_games_scale,
-            axis=alt.Axis(values=GAMES_TICKS, format="d"),
-        ),
-        tooltip=["rating:Q", "games_played:Q"],
-    ).properties(height=_main_h, width=_main_w).add_params(_zoom)
-
-    top_hist = scatter_base.mark_bar(opacity=0.75).encode(
-        x=alt.X(
-            "rating:Q",
-            bin=alt.Bin(step=10, extent=[RATING_MIN, RATING_MAX]),
-            scale=_rating_scale,
-            axis=None,
-        ),
-        y=alt.Y(
-            "count():Q",
-            title=None,
-            axis=alt.Axis(format="d", tickMinStep=1),
-        ),
-    ).properties(height=_marg, width=_main_w)
-
-    right_hist = scatter_base.mark_bar(opacity=0.75).encode(
-        y=alt.Y(
-            "games_played:Q",
-            bin=alt.Bin(maxbins=40),
-            scale=_games_scale,
-            axis=None,
-        ),
-        x=alt.X(
-            "count():Q",
-            title=None,
-            axis=alt.Axis(format="d", tickMinStep=1),
-        ),
-    ).properties(height=_main_h, width=_marg)
-
-    joint = alt.vconcat(
-        top_hist,
-        alt.hconcat(scatter, right_hist, spacing=4),
-        spacing=4,
-    ).properties(title="Pixie Chess: Rating vs Games Played")
-    joint
-    return (joint,)
 
 
 if __name__ == "__main__":
