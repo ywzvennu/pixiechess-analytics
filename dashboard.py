@@ -1,3 +1,11 @@
+# /// script
+# requires-python = ">=3.13"
+# dependencies = [
+#     "altair>=6.0.0",
+#     "marimo>=0.22.4",
+#     "polars>=1.39.3",
+# ]
+# ///
 import marimo
 
 app = marimo.App(width="full", app_title="Pixie Chess Analytics")
