@@ -34,8 +34,11 @@ def __(mo):
 @app.cell
 def __(pl):
     import math
+    import json
 
-    players = pl.read_ndjson("data/players.jsonl")
+    with open("data/players.jsonl", "r") as _f:
+        _rows = [json.loads(_line) for _line in _f if _line.strip()]
+    players = pl.DataFrame(_rows)
     INITIAL_RATING = 1500
 
     _rmin = int(players["rating"].min())
