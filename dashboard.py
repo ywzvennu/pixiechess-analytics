@@ -39,10 +39,15 @@ def __(mo, pl):
     import math
     import json
     import urllib.request
+    from pathlib import Path
 
-    _url = str(mo.notebook_location() / "data" / "players.jsonl")
-    with urllib.request.urlopen(_url) as _f:
-        _rows = [json.loads(_line) for _line in _f if _line.strip()]
+    _loc = mo.notebook_location() / "data" / "players.jsonl"
+    if isinstance(_loc, Path):
+        with open(_loc) as _f:
+            _rows = [json.loads(_line) for _line in _f if _line.strip()]
+    else:
+        with urllib.request.urlopen(str(_loc)) as _f:
+            _rows = [json.loads(_line) for _line in _f if _line.strip()]
     players = pl.DataFrame(_rows)
     INITIAL_RATING = 1500
 
