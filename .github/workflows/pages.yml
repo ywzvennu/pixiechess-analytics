@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
-      - run: uv run marimo export html-wasm dashboard.py -o site --mode run
+      - run: uv run marimo export html-wasm dashboard.py -o site --mode run --no-include-code
       - run: mkdir -p site/data && cp data/players.jsonl site/data/
       - uses: actions/upload-pages-artifact@v3
         with:
