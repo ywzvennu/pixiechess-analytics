@@ -369,12 +369,16 @@ def __(
         title="games played (g)",
         axis=alt.Axis(grid=True, domainWidth=1, tickWidth=1),
     )
+    _select = alt.selection_point(
+        fields=["games_bucket"], bind="legend", toggle="true"
+    )
     _color = alt.Color(
         "games_bucket:N",
         sort=_order,
         scale=alt.Scale(domain=_order, range=_range),
-        legend=None,
+        title="games played (g)",
     )
+    _opacity = alt.condition(_select, alt.value(1.0), alt.value(0.1))
 
     _tooltip = [
         alt.Tooltip("games_bucket:N", title="games"),
@@ -387,13 +391,14 @@ def __(
         alt.Tooltip("n:Q", format=",", title="n"),
     ]
 
-    _base = alt.Chart(_stats)
+    _base = alt.Chart(_stats).add_params(_select)
 
     _whisker = _base.mark_rule(size=1).encode(
         x=alt.X("min:Q", title="rating", scale=_x_scale, axis=_x_axis),
         x2="max:Q",
         y=_y,
         color=_color,
+        opacity=_opacity,
         tooltip=_tooltip,
     )
 
@@ -402,6 +407,7 @@ def __(
         x2="q3:Q",
         y=_y,
         color=_color,
+        opacity=_opacity,
         tooltip=_tooltip,
     )
 
@@ -412,6 +418,7 @@ def __(
     ).encode(
         x=alt.X("median:Q", scale=_x_scale),
         y=_y,
+        opacity=_opacity,
         tooltip=_tooltip,
     )
 
@@ -463,8 +470,12 @@ def __(
         _group_palette[i % len(_group_palette)] for i in range(len(bucket_order))
     ]
 
+    _select = alt.selection_point(
+        fields=["games_bucket"], bind="legend", toggle="true"
+    )
     cdf = (
         alt.Chart(_combined)
+        .add_params(_select)
         .transform_window(
             cumulative="count()",
             sort=[{"field": "rating"}],
@@ -506,6 +517,7 @@ def __(
                 title="games played (g)",
                 scale=alt.Scale(domain=_order, range=_range),
             ),
+            opacity=alt.condition(_select, alt.value(1.0), alt.value(0.1)),
             tooltip=[
                 alt.Tooltip("games_bucket:N", title="games"),
                 alt.Tooltip("rating:Q", title="rating", format=",.1f"),
