@@ -58,8 +58,13 @@ def __(mo, players):
         ## Overview
 
         - **Players:** {players.height:,}
-        - **Mean rating:** {players['rating'].mean():.1f}
-        - **Median rating:** {players['rating'].median():.1f}
+        - **Games played:** {players['games_played'].sum() // 2:,}
+        - **Mean rating:** {players['rating'].mean():,.1f}
+        - **Median rating:** {players['rating'].median():,.1f}
+        - **Min rating:** {players['rating'].min():,.1f}
+        - **Max rating:** {players['rating'].max():,.1f}
+        - **Mean games played:** {players['games_played'].mean():.1f}
+        - **Median games played:** {players['games_played'].median():.1f}
         - **Max games played:** {players['games_played'].max():,}
         """
     )
@@ -86,12 +91,25 @@ def __(INITIAL_RATING, RATING_MAX, RATING_MIN, RATING_TICKS, alt, players):
                 bin=alt.Bin(step=10, extent=[RATING_MIN, RATING_MAX]),
                 title="Rating",
                 scale=alt.Scale(domain=[RATING_MIN, RATING_MAX], nice=False),
-                axis=alt.Axis(values=RATING_TICKS, format="d", labelAngle=0),
+                axis=alt.Axis(
+                    values=RATING_TICKS,
+                    format="d",
+                    labelAngle=0,
+                    grid=True,
+                    domainWidth=1,
+                    tickWidth=1,
+                ),
             ),
             y=alt.Y(
                 "count():Q",
                 title="Players",
-                axis=alt.Axis(format="d", tickMinStep=1),
+                axis=alt.Axis(
+                    format="d",
+                    tickMinStep=1,
+                    grid=True,
+                    domainWidth=1,
+                    tickWidth=1,
+                ),
             ),
             tooltip=[alt.Tooltip("count():Q", title="Players")],
         )
@@ -169,7 +187,14 @@ def __(alt, games_log_y, players):
                 bin=alt.Bin(step=_step, extent=[0, _domain_max]),
                 title="Games Played",
                 scale=alt.Scale(domain=[0, _domain_max], nice=False),
-                axis=alt.Axis(format="d", labelAngle=0, tickMinStep=1),
+                axis=alt.Axis(
+                    format="d",
+                    labelAngle=0,
+                    tickMinStep=1,
+                    grid=True,
+                    domainWidth=1,
+                    tickWidth=1,
+                ),
             ),
             y=alt.Y(
                 "count():Q",
@@ -178,7 +203,13 @@ def __(alt, games_log_y, players):
                     type="log" if games_log_y.value else "linear",
                     base=10,
                 ),
-                axis=alt.Axis(format="d", tickMinStep=1),
+                axis=alt.Axis(
+                    format="d",
+                    tickMinStep=1,
+                    grid=True,
+                    domainWidth=1,
+                    tickWidth=1,
+                ),
             ),
             tooltip=[alt.Tooltip("count():Q", title="Players")],
         )
