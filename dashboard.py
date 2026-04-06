@@ -18,7 +18,7 @@ def __():
     import polars as pl
 
     # Hide Altair's chart action menu (View Source / Open in Vega Editor / …).
-    alt.renderers.set_embed_options(actions=False)
+    _ = alt.renderers.set_embed_options(actions=False)
     return alt, mo, pl
 
 
