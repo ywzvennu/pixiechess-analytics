@@ -433,6 +433,120 @@ def __(
 
 @app.cell
 def __(mo):
+    mo.md("## Rating Histogram by Games Played")
+    return
+
+
+@app.cell
+def __(mo):
+    hist_bin = mo.ui.dropdown(
+        options=["10", "20", "50", "100"],
+        value="20",
+        label="bin size",
+    )
+    hist_log_y = mo.ui.switch(value=False, label="log y-axis")
+    mo.hstack([hist_bin, hist_log_y], justify="start", gap=2)
+    return hist_bin, hist_log_y
+
+
+@app.cell
+def __(
+    RATING_MAX,
+    RATING_MIN,
+    RATING_TICKS,
+    alt,
+    bucket_order,
+    hist_bin,
+    hist_log_y,
+    pl,
+    players,
+    players_bucketed,
+):
+    _overall = players.select(pl.col("rating")).with_columns(
+        pl.lit("all").alias("games_bucket")
+    )
+    _combined = pl.concat(
+        [
+            _overall,
+            players_bucketed.select(["rating", "games_bucket"]),
+        ]
+    )
+    _order = ["all", *bucket_order]
+
+    _group_palette = [
+        "#f58518", "#54a24b", "#e45756", "#72b7b2",
+        "#eeca3b", "#b279a2", "#ff9da6", "#9d755d", "#bab0ac",
+    ]
+    _range = ["#4c78a8"] + [
+        _group_palette[i % len(_group_palette)] for i in range(len(bucket_order))
+    ]
+
+    _select = alt.selection_point(
+        fields=["games_bucket"], bind="legend", toggle="true"
+    )
+    _step = int(hist_bin.value)
+    _hmin = (RATING_MIN // _step) * _step
+    _hmax = ((RATING_MAX + _step - 1) // _step) * _step
+
+    hist_chart = (
+        alt.Chart(_combined)
+        .add_params(_select)
+        .mark_line(interpolate="step-after", strokeWidth=2)
+        .encode(
+            x=alt.X(
+                "rating:Q",
+                bin=alt.Bin(step=_step, extent=[_hmin, _hmax]),
+                title="rating",
+                scale=alt.Scale(domain=[_hmin, _hmax], nice=False),
+                axis=alt.Axis(
+                    values=RATING_TICKS,
+                    format="d",
+                    labelAngle=0,
+                    grid=True,
+                    domainWidth=1,
+                    tickWidth=1,
+                ),
+            ),
+            y=alt.Y(
+                "count():Q",
+                title="players" + (" (log)" if hist_log_y.value else ""),
+                scale=alt.Scale(
+                    type="log" if hist_log_y.value else "linear",
+                    base=10,
+                ),
+                axis=alt.Axis(
+                    format="d",
+                    tickMinStep=1,
+                    grid=True,
+                    domainWidth=1,
+                    tickWidth=1,
+                ),
+            ),
+            color=alt.Color(
+                "games_bucket:N",
+                sort=_order,
+                title="games played (g)",
+                scale=alt.Scale(domain=_order, range=_range),
+            ),
+            opacity=alt.condition(_select, alt.value(1.0), alt.value(0.15)),
+            tooltip=[
+                alt.Tooltip("games_bucket:N", title="games"),
+                alt.Tooltip("count():Q", title="players", format=","),
+            ],
+        )
+        .properties(
+            height=420,
+            width="container",
+            title="Pixie Chess: Rating Histogram by Games Played",
+        )
+        .interactive(bind_y=False)
+    )
+    hist_chart
+    return (hist_chart,)
+
+
+@app.cell
+def __(mo):
     mo.md("## Rating CDF by Games Played")
     return
 
